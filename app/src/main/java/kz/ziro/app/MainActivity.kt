@@ -11,6 +11,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kz.ziro.app.data.TestType
+import kz.ziro.app.ui.screens.AnswerSheetScreen
 import kz.ziro.app.ui.screens.CreateTestTypeScreen
 import kz.ziro.app.ui.screens.HomeScreen
 import kz.ziro.app.ui.screens.LoginScreen
@@ -30,12 +32,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { LOGIN, HOME, TEST_TYPES_LIST, CREATE_TEST_TYPE }
+private enum class Screen { LOGIN, HOME, TEST_TYPES_LIST, CREATE_TEST_TYPE, ANSWER_SHEET }
 
 @Composable
 fun ZiroApp() {
     var screen by remember { mutableStateOf(Screen.LOGIN) }
     var userRole by remember { mutableStateOf("") }
+    var selectedTestType by remember { mutableStateOf<TestType?>(null) }
 
     when (screen) {
         Screen.LOGIN -> LoginScreen(
@@ -52,11 +55,20 @@ fun ZiroApp() {
         Screen.TEST_TYPES_LIST -> TestTypesListScreen(
             onBack = { screen = Screen.HOME },
             onCreateNew = { screen = Screen.CREATE_TEST_TYPE },
-            onOpen = { /* details screen later */ }
+            onOpen = { tt ->
+                selectedTestType = tt
+                screen = Screen.ANSWER_SHEET
+            }
         )
         Screen.CREATE_TEST_TYPE -> CreateTestTypeScreen(
             onBack = { screen = Screen.TEST_TYPES_LIST },
             onSaved = { screen = Screen.TEST_TYPES_LIST }
         )
+        Screen.ANSWER_SHEET -> selectedTestType?.let { tt ->
+            AnswerSheetScreen(
+                testType = tt,
+                onBack = { screen = Screen.TEST_TYPES_LIST }
+            )
+        }
     }
 }

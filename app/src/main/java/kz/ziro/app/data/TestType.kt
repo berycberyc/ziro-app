@@ -7,7 +7,8 @@ data class Stage(
     val subject: String,
     val questions: Int,
     val minutes: Int,
-    val format: String // "abcd" or "number"
+    val format: String, // "abcd" or "number"
+    val newPage: Boolean = false // admin marks this subject as starting a new sheet page
 )
 
 @Serializable

@@ -21,7 +21,8 @@ private data class StageInput(
     var subject: String = "",
     var questions: String = "",
     var minutes: String = "",
-    var format: String = "abcd"
+    var format: String = "abcd",
+    var newPage: Boolean = false
 )
 
 @Composable
@@ -53,7 +54,8 @@ fun CreateTestTypeScreen(onBack: () -> Unit, onSaved: () -> Unit) {
                     subject = it.subject,
                     questions = it.questions.toIntOrNull() ?: 0,
                     minutes = it.minutes.toIntOrNull() ?: 0,
-                    format = it.format
+                    format = it.format,
+                    newPage = it.newPage
                 )
             }
             val success = repo.create(
@@ -168,6 +170,18 @@ fun CreateTestTypeScreen(onBack: () -> Unit, onSaved: () -> Unit) {
                                 Text("✕ Өшіру")
                             }
                         }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Жаңа беттен бастау", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = stage.newPage,
+                            onCheckedChange = { newVal ->
+                                stages = stages.toMutableList().also {
+                                    it[index] = it[index].copy(newPage = newVal)
+                                }
+                            }
+                        )
                     }
                 }
             }
