@@ -21,6 +21,21 @@ object AnswerSheetGeometry {
     const val MARK_SIZE = 14f
     const val MARK_INSET = 12f
 
+    // Header layout — QR is large and centered at the top for reliable
+    // scanning; header fields stack as one compact column below it. Both
+    // the generator (drawing) and this geometry (bubble coordinates)
+    // build the content start from these exact same constants, in the
+    // exact same order, so they can never drift apart.
+    const val QR_SIZE = 105f
+    const val HEADER_QR_GAP = 8f
+    const val TITLE_BLOCK_HEIGHT = 24f
+    const val FIELD_LINE_HEIGHT = 13f
+    const val FIELD_LINE_COUNT = 4
+    const val DIVIDER_GAP = 6f
+    val CONTENT_START_Y: Float =
+        MARGIN + QR_SIZE + HEADER_QR_GAP + TITLE_BLOCK_HEIGHT +
+            FIELD_LINE_HEIGHT * FIELD_LINE_COUNT + DIVIDER_GAP
+
     data class OptionCenter(val label: String, val x: Float, val y: Float)
     data class QuestionLayout(
         val questionNumber: Int,
@@ -68,9 +83,7 @@ object AnswerSheetGeometry {
     }
 
     private fun layoutStagesOnPage(stagesOnPage: List<Stage>): List<StageLayout> {
-        // Header block height: title area + QR box + field lines, matches
-        // the fixed header drawn at the top of every page in the generator.
-        val contentStartY = MARGIN + 70f + 16f + 16f + 16f + 24f + 20f
+        val contentStartY = CONTENT_START_Y
 
         val colWidth = (PAGE_WIDTH - 2 * MARGIN - 20f) / 2
         var colX = MARGIN
@@ -96,25 +109,37 @@ object AnswerSheetGeometry {
     }
 
     private fun layoutStage(stage: Stage, x: Float, startY: Float, width: Float): StageLayout {
-        val titleHeight = 14f
+        val titleHeight = 22f
         val rowHeight = 12f
         val colGap = width / 2
         val rowsPerCol = (stage.questions + 1) / 2
 
+        val labelWidth = 20f
+        val letterSpacing = 15f
+        val boxSpacing = 13f
+        val bubbleRadius = 5.5f
+
+        val blockWidth = if (stage.format == "number") {
+            labelWidth + 2 * boxSpacing + 10f
+        } else {
+            labelWidth + 3 * letterSpacing + 2 * bubbleRadius
+        }
+        val blockOffsetX = ((colGap - blockWidth) / 2f).coerceAtLeast(0f)
+
         val questions = (1..stage.questions).map { q ->
             val col = (q - 1) / rowsPerCol
             val row = (q - 1) % rowsPerCol
-            val qx = x + col * colGap
+            val qx = x + col * colGap + blockOffsetX
             val qy = startY + titleHeight + row * rowHeight
 
             val options = if (stage.format == "number") {
                 (0..2).map { i ->
-                    val bx = qx + 18f + i * 12f + 5f // center of the 10pt-wide box
+                    val bx = qx + labelWidth + i * boxSpacing + 5f
                     OptionCenter(i.toString(), bx, qy - 3f)
                 }
             } else {
                 listOf("A", "B", "C", "D").mapIndexed { i, letter ->
-                    val cx = qx + 20f + i * 14f
+                    val cx = qx + labelWidth + i * letterSpacing
                     OptionCenter(letter, cx, qy - 3f)
                 }
             }

@@ -23,9 +23,15 @@ import kz.ziro.app.pdf.AnswerSheetGeometry.PAGE_WIDTH
  */
 object AnswerSheetPdfGenerator {
 
+    private fun languageLabel(code: String?): String = when (code) {
+        "kk" -> "Қазақша"
+        "ru" -> "Орысша"
+        else -> "—"
+    }
+
     /** Blank template — no QR, empty header fields to fill by hand. */
     fun generate(context: Context, testType: TestType): File =
-        render(context, testType, qrData = null, fileSuffix = "answer_sheet")
+        render(context, testType, qrData = null, sessionTitle = null, fileSuffix = "answer_sheet")
 
     /**
      * Personalized sheet with a real, scannable QR code and filled-in
@@ -33,7 +39,7 @@ object AnswerSheetPdfGenerator {
      * for real per-student sheets once distribution data flows in.
      */
     fun generateWithQr(context: Context, testType: TestType, qrData: SheetQrData): File =
-        render(context, testType, qrData, fileSuffix = "personalized")
+        render(context, testType, qrData, sessionTitle = null, fileSuffix = "personalized")
 
     /**
      * Combined batch of personalized sheets for every paid, distributed
@@ -59,7 +65,8 @@ object AnswerSheetPdfGenerator {
                 testTypeId = testType.id ?: "",
                 studentName = registration.students?.full_name ?: "—",
                 classroom = registration.classroom ?: "—",
-                variant = registration.test_variant ?: "—"
+                variant = registration.test_variant ?: "—",
+                language = languageLabel(registration.students?.language)
             )
             val pages = AnswerSheetGeometry.computePages(testType)
             pages.forEach { pageLayout ->
@@ -68,7 +75,7 @@ object AnswerSheetPdfGenerator {
                     PAGE_WIDTH.toInt(), PAGE_HEIGHT.toInt(), pageCounter
                 ).create()
                 val page = document.startPage(pageInfo)
-                drawPage(page.canvas, testType, pageLayout, pages.size, qrData)
+                drawPage(page.canvas, testType, pageLayout, pages.size, qrData, sessionTitle)
                 document.finishPage(page)
             }
         }
@@ -80,7 +87,13 @@ object AnswerSheetPdfGenerator {
         return file
     }
 
-    private fun render(context: Context, testType: TestType, qrData: SheetQrData?, fileSuffix: String): File {
+    private fun render(
+        context: Context,
+        testType: TestType,
+        qrData: SheetQrData?,
+        sessionTitle: String?,
+        fileSuffix: String
+    ): File {
         val document = PdfDocument()
         val pages = AnswerSheetGeometry.computePages(testType)
 
@@ -89,7 +102,7 @@ object AnswerSheetPdfGenerator {
                 PAGE_WIDTH.toInt(), PAGE_HEIGHT.toInt(), pageLayout.pageNumber
             ).create()
             val page = document.startPage(pageInfo)
-            drawPage(page.canvas, testType, pageLayout, pages.size, qrData)
+            drawPage(page.canvas, testType, pageLayout, pages.size, qrData, sessionTitle)
             document.finishPage(page)
         }
 
@@ -118,12 +131,14 @@ object AnswerSheetPdfGenerator {
         testType: TestType,
         pageLayout: AnswerSheetGeometry.PageLayout,
         totalPages: Int,
-        qrData: SheetQrData?
+        qrData: SheetQrData?,
+        sessionTitle: String?
     ) {
-        val titlePaint = Paint().apply { color = Color.BLACK; textSize = 16f; isFakeBoldText = true }
         val subtitlePaint = Paint().apply { color = Color.GRAY; textSize = 9f }
+        val titlePaint = Paint().apply { color = Color.BLACK; textSize = 15f; isFakeBoldText = true }
+        val sessionPaint = Paint().apply { color = Color.DKGRAY; textSize = 10f }
         val headerFieldPaint = Paint().apply { color = Color.DKGRAY; textSize = 9f }
-        val filledFieldPaint = Paint().apply { color = Color.BLACK; textSize = 9f; isFakeBoldText = true }
+        val filledFieldPaint = Paint().apply { color = Color.BLACK; textSize = 10f; isFakeBoldText = true }
         val subjectPaint = Paint().apply { color = Color.BLACK; textSize = 11f; isFakeBoldText = true }
         val questionPaint = Paint().apply { color = Color.BLACK; textSize = 8f }
         val circlePaint = Paint().apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 1f }
@@ -136,42 +151,48 @@ object AnswerSheetPdfGenerator {
             canvas.drawRect(mark.x - half, mark.y - half, mark.x + half, mark.y + half, registrationMarkPaint)
         }
 
+        val qrSize = AnswerSheetGeometry.QR_SIZE
+        val qrLeft = (PAGE_WIDTH - qrSize) / 2f
         var y = MARGIN
-        canvas.drawText("Жауап парағы", MARGIN, y + 10, subtitlePaint)
-        canvas.drawText("${testType.name_kk} / ${testType.name_ru}", MARGIN, y + 28, titlePaint)
-        if (totalPages > 1) {
-            canvas.drawText("Бет ${pageLayout.pageNumber} / $totalPages", MARGIN, y + 42, subtitlePaint)
-        }
 
-        val qrBoxSize = 60f
-        val qrBoxLeft = PAGE_WIDTH - MARGIN - qrBoxSize
+        // QR centered at the very top for reliable scanning.
         if (qrData != null) {
-            val qrBitmap = makeQrBitmap(qrData.encode(), 300)
-            val destRect = android.graphics.RectF(qrBoxLeft, y, qrBoxLeft + qrBoxSize, y + qrBoxSize)
+            val qrBitmap = makeQrBitmap(qrData.encode(), 400)
+            val destRect = android.graphics.RectF(qrLeft, y, qrLeft + qrSize, y + qrSize)
             canvas.drawBitmap(qrBitmap, null, destRect, null)
         } else {
-            canvas.drawRect(qrBoxLeft, y, PAGE_WIDTH - MARGIN, y + qrBoxSize, lightLinePaint)
-            canvas.drawText("QR", qrBoxLeft + qrBoxSize / 2 - 8, y + qrBoxSize / 2 + 4, subtitlePaint)
+            canvas.drawRect(qrLeft, y, qrLeft + qrSize, y + qrSize, lightLinePaint)
+            canvas.drawText("QR", qrLeft + qrSize / 2 - 10, y + qrSize / 2 + 5, subtitlePaint)
         }
+        y += qrSize + AnswerSheetGeometry.HEADER_QR_GAP
 
-        y += 70f
-        canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, lightLinePaint)
-        y += 16f
-        if (qrData != null) {
-            canvas.drawText("Аты-жөні: ${qrData.studentName}", MARGIN, y, filledFieldPaint)
-            canvas.drawText("Аудитория: ${qrData.classroom}", PAGE_WIDTH / 2f, y, filledFieldPaint)
-            y += 16f
-            canvas.drawText("Тіл: —", MARGIN, y, filledFieldPaint)
-            canvas.drawText("Нұсқа: ${qrData.variant}", PAGE_WIDTH / 2f, y, filledFieldPaint)
-        } else {
-            canvas.drawText("Аты-жөні: ______________________", MARGIN, y, headerFieldPaint)
-            canvas.drawText("Аудитория: __________", PAGE_WIDTH / 2f, y, headerFieldPaint)
-            y += 16f
-            canvas.drawText("Тіл: __________", MARGIN, y, headerFieldPaint)
-            canvas.drawText("Нұсқа: __________", PAGE_WIDTH / 2f, y, headerFieldPaint)
+        // Test name + session name, prominent, left aligned below the QR.
+        canvas.drawText("${testType.name_kk} / ${testType.name_ru}", MARGIN, y + 4, titlePaint)
+        if (totalPages > 1) {
+            canvas.drawText(" (Бет ${pageLayout.pageNumber}/$totalPages)", MARGIN + 260, y + 4, subtitlePaint)
         }
-        y += 24f
+        if (!sessionTitle.isNullOrBlank()) {
+            canvas.drawText(sessionTitle, MARGIN, y + 16, sessionPaint)
+        }
+        y += AnswerSheetGeometry.TITLE_BLOCK_HEIGHT
+
+        // Header fields — single compact column of 4 lines.
+        val fieldLineHeight = AnswerSheetGeometry.FIELD_LINE_HEIGHT
+        if (qrData != null) {
+            canvas.drawText("Аты-жөні: ${qrData.studentName}", MARGIN, y, filledFieldPaint); y += fieldLineHeight
+            canvas.drawText("Тіл: ${qrData.language}", MARGIN, y, filledFieldPaint); y += fieldLineHeight
+            canvas.drawText("Аудитория: ${qrData.classroom}", MARGIN, y, filledFieldPaint); y += fieldLineHeight
+            canvas.drawText("Нұсқа: ${qrData.variant}", MARGIN, y, filledFieldPaint); y += fieldLineHeight
+        } else {
+            canvas.drawText("Аты-жөні: ______________________", MARGIN, y, headerFieldPaint); y += fieldLineHeight
+            canvas.drawText("Тіл: __________", MARGIN, y, headerFieldPaint); y += fieldLineHeight
+            canvas.drawText("Аудитория: __________", MARGIN, y, headerFieldPaint); y += fieldLineHeight
+            canvas.drawText("Нұсқа: __________", MARGIN, y, headerFieldPaint); y += fieldLineHeight
+        }
+        y += AnswerSheetGeometry.DIVIDER_GAP
         canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, lightLinePaint)
+        // y now equals AnswerSheetGeometry.CONTENT_START_Y exactly — the
+        // question grid below starts at that same coordinate.
 
         pageLayout.stages.forEach { stageLayout ->
             canvas.drawText(
@@ -187,7 +208,7 @@ object AnswerSheetPdfGenerator {
                     }
                 } else {
                     q.options.forEach { opt ->
-                        canvas.drawCircle(opt.x, opt.y, 5f, circlePaint)
+                        canvas.drawCircle(opt.x, opt.y, 5.5f, circlePaint)
                     }
                 }
             }
