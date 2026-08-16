@@ -1,7 +1,7 @@
 package kz.ziro.app.data
 
 import io.github.jan.supabase.createSupabaseClient
-import io.github.jan.supabase.gotrue.GoTrue
+import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.postgrest.Postgrest
 
 /**
@@ -19,7 +19,7 @@ object SupabaseProvider {
         supabaseUrl = SUPABASE_URL,
         supabaseKey = SUPABASE_ANON_KEY
     ) {
-        install(GoTrue)
+        install(Auth)
         install(Postgrest)
     }
 }

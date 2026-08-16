@@ -51,9 +51,9 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // Supabase client (auth + database), same backend as the website
-    implementation(platform("io.github.jan-tennert.supabase:bom:2.5.4"))
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.5.0"))
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
-    implementation("io.github.jan-tennert.supabase:gotrue-kt")
+    implementation("io.github.jan-tennert.supabase:auth-kt")
     implementation("io.ktor:ktor-client-android:2.3.11")
 
     // Coroutines

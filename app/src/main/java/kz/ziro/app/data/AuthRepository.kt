@@ -1,7 +1,7 @@
 package kz.ziro.app.data
 
-import io.github.jan.supabase.gotrue.gotrue
-import io.github.jan.supabase.gotrue.providers.builtin.Email
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 
@@ -17,12 +17,12 @@ class AuthRepository {
 
     suspend fun login(email: String, password: String): LoginResult {
         return try {
-            client.gotrue.loginWith(Email) {
+            client.auth.signInWith(Email) {
                 this.email = email
                 this.password = password
             }
 
-            val userId = client.gotrue.currentUserOrNull()?.id
+            val userId = client.auth.currentUserOrNull()?.id
                 ?: return LoginResult.Error("Пайдаланушы табылмады")
 
             val profile = client.postgrest["profiles"]
@@ -34,7 +34,7 @@ class AuthRepository {
             if (profile.role == "admin" || profile.role == "teacher") {
                 LoginResult.Success(profile.role)
             } else {
-                client.gotrue.logout()
+                client.auth.signOut()
                 LoginResult.NotAllowed(profile.role)
             }
         } catch (e: Exception) {
@@ -43,6 +43,6 @@ class AuthRepository {
     }
 
     suspend fun logout() {
-        client.gotrue.logout()
+        client.auth.signOut()
     }
 }
