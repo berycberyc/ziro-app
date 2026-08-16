@@ -7,41 +7,28 @@ import android.graphics.pdf.PdfDocument
 import android.content.Context
 import java.io.File
 import java.io.FileOutputStream
-import kz.ziro.app.data.Stage
 import kz.ziro.app.data.TestType
+import kz.ziro.app.pdf.AnswerSheetGeometry.PAGE_HEIGHT
+import kz.ziro.app.pdf.AnswerSheetGeometry.PAGE_WIDTH
+import kz.ziro.app.pdf.AnswerSheetGeometry.MARGIN
 
 /**
- * Generates a blank answer sheet PDF from a TestType's stages.
- * Stages marked with newPage=true start a fresh page (admin-controlled).
- * Within each stage, questions fill the left column top-to-bottom first,
- * then the right column (block numbering, not alternating).
+ * Generates a blank answer sheet PDF from a TestType's stages, using the
+ * shared AnswerSheetGeometry so the printed layout and the OMR analyzer
+ * that later reads it always agree on where every bubble is.
  */
 object AnswerSheetPdfGenerator {
 
-    private const val PAGE_WIDTH = 595
-    private const val PAGE_HEIGHT = 842
-    private const val MARGIN = 32f
-
     fun generate(context: Context, testType: TestType): File {
         val document = PdfDocument()
+        val pages = AnswerSheetGeometry.computePages(testType)
 
-        // Split stages into pages: a stage with newPage=true starts a new page.
-        // The very first stage always begins page 1 regardless of its flag.
-        val pages = mutableListOf<MutableList<Stage>>()
-        testType.stages.forEachIndexed { index, stage ->
-            if (index == 0 || !stage.newPage) {
-                if (pages.isEmpty()) pages.add(mutableListOf())
-                pages.last().add(stage)
-            } else {
-                pages.add(mutableListOf(stage))
-            }
-        }
-        if (pages.isEmpty()) pages.add(mutableListOf())
-
-        pages.forEachIndexed { pageIndex, stagesOnPage ->
-            val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageIndex + 1).create()
+        pages.forEach { pageLayout ->
+            val pageInfo = PdfDocument.PageInfo.Builder(
+                PAGE_WIDTH.toInt(), PAGE_HEIGHT.toInt(), pageLayout.pageNumber
+            ).create()
             val page = document.startPage(pageInfo)
-            drawContent(page.canvas, testType, stagesOnPage, pageIndex + 1, pages.size)
+            drawPage(page.canvas, testType, pageLayout, pages.size)
             document.finishPage(page)
         }
 
@@ -53,183 +40,68 @@ object AnswerSheetPdfGenerator {
         return file
     }
 
-    private fun drawContent(
+    private fun drawPage(
         canvas: Canvas,
         testType: TestType,
-        stagesOnPage: List<Stage>,
-        pageNumber: Int,
+        pageLayout: AnswerSheetGeometry.PageLayout,
         totalPages: Int
     ) {
-        val titlePaint = Paint().apply {
-            color = Color.BLACK
-            textSize = 16f
-            isFakeBoldText = true
-        }
-        val subtitlePaint = Paint().apply {
-            color = Color.GRAY
-            textSize = 9f
-        }
-        val headerFieldPaint = Paint().apply {
-            color = Color.DKGRAY
-            textSize = 9f
-        }
-        val subjectPaint = Paint().apply {
-            color = Color.BLACK
-            textSize = 11f
-            isFakeBoldText = true
-        }
-        val questionPaint = Paint().apply {
-            color = Color.BLACK
-            textSize = 8f
-        }
-        val circlePaint = Paint().apply {
-            color = Color.BLACK
-            style = Paint.Style.STROKE
-            strokeWidth = 1f
-        }
-        val boxPaint = Paint().apply {
-            color = Color.BLACK
-            style = Paint.Style.STROKE
-            strokeWidth = 1f
-        }
-        val qrBoxPaint = Paint().apply {
-            color = Color.LTGRAY
-            style = Paint.Style.STROKE
-            strokeWidth = 1f
-        }
-        val registrationMarkPaint = Paint().apply {
-            color = Color.BLACK
-            style = Paint.Style.FILL
-        }
+        val titlePaint = Paint().apply { color = Color.BLACK; textSize = 16f; isFakeBoldText = true }
+        val subtitlePaint = Paint().apply { color = Color.GRAY; textSize = 9f }
+        val headerFieldPaint = Paint().apply { color = Color.DKGRAY; textSize = 9f }
+        val subjectPaint = Paint().apply { color = Color.BLACK; textSize = 11f; isFakeBoldText = true }
+        val questionPaint = Paint().apply { color = Color.BLACK; textSize = 8f }
+        val circlePaint = Paint().apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 1f }
+        val boxPaint = Paint().apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 1f }
+        val lightLinePaint = Paint().apply { color = Color.LTGRAY; style = Paint.Style.STROKE; strokeWidth = 1f }
+        val registrationMarkPaint = Paint().apply { color = Color.BLACK; style = Paint.Style.FILL }
 
-        // Corner registration marks: solid black squares used by the scanning
-        // app to detect and correct page skew/rotation before reading bubbles.
-        val markSize = 14f
-        val markInset = 12f
-        canvas.drawRect(markInset, markInset, markInset + markSize, markInset + markSize, registrationMarkPaint)
-        canvas.drawRect(
-            PAGE_WIDTH - markInset - markSize, markInset,
-            PAGE_WIDTH - markInset, markInset + markSize,
-            registrationMarkPaint
-        )
-        canvas.drawRect(
-            markInset, PAGE_HEIGHT - markInset - markSize,
-            markInset + markSize, PAGE_HEIGHT - markInset,
-            registrationMarkPaint
-        )
-        canvas.drawRect(
-            PAGE_WIDTH - markInset - markSize, PAGE_HEIGHT - markInset - markSize,
-            PAGE_WIDTH - markInset, PAGE_HEIGHT - markInset,
-            registrationMarkPaint
-        )
+        // Corner registration marks (used by the app to correct skew when scanning)
+        val half = AnswerSheetGeometry.MARK_SIZE / 2
+        AnswerSheetGeometry.registrationMarkCenters().forEach { mark ->
+            canvas.drawRect(mark.x - half, mark.y - half, mark.x + half, mark.y + half, registrationMarkPaint)
+        }
 
         var y = MARGIN
-
         canvas.drawText("Жауап парағы", MARGIN, y + 10, subtitlePaint)
         canvas.drawText("${testType.name_kk} / ${testType.name_ru}", MARGIN, y + 28, titlePaint)
         if (totalPages > 1) {
-            canvas.drawText(
-                "Бет $pageNumber / $totalPages",
-                MARGIN, y + 42, subtitlePaint
-            )
+            canvas.drawText("Бет ${pageLayout.pageNumber} / $totalPages", MARGIN, y + 42, subtitlePaint)
         }
 
         val qrBoxSize = 60f
-        canvas.drawRect(
-            PAGE_WIDTH - MARGIN - qrBoxSize, y,
-            PAGE_WIDTH - MARGIN, y + qrBoxSize,
-            qrBoxPaint
-        )
-        canvas.drawText(
-            "QR",
-            PAGE_WIDTH - MARGIN - qrBoxSize / 2 - 8, y + qrBoxSize / 2 + 4,
-            subtitlePaint
-        )
+        canvas.drawRect(PAGE_WIDTH - MARGIN - qrBoxSize, y, PAGE_WIDTH - MARGIN, y + qrBoxSize, lightLinePaint)
+        canvas.drawText("QR", PAGE_WIDTH - MARGIN - qrBoxSize / 2 - 8, y + qrBoxSize / 2 + 4, subtitlePaint)
 
         y += 70f
-        canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, qrBoxPaint)
+        canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, lightLinePaint)
         y += 16f
-
         canvas.drawText("Аты-жөні: ______________________", MARGIN, y, headerFieldPaint)
         canvas.drawText("Аудитория: __________", PAGE_WIDTH / 2f, y, headerFieldPaint)
         y += 16f
         canvas.drawText("Тіл: __________", MARGIN, y, headerFieldPaint)
         canvas.drawText("Нұсқа: __________", PAGE_WIDTH / 2f, y, headerFieldPaint)
-
         y += 24f
-        canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, qrBoxPaint)
-        y += 20f
+        canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, lightLinePaint)
 
-        val colWidth = (PAGE_WIDTH - 2 * MARGIN - 20f) / 2
-        var colX = MARGIN
-        var colY = y
-        var maxYInRow = y
-
-        stagesOnPage.forEachIndexed { index, stage ->
-            val stageHeight = drawStage(
-                canvas, colX, colY, colWidth, stage,
-                subjectPaint, questionPaint, circlePaint, boxPaint
+        pageLayout.stages.forEach { stageLayout ->
+            canvas.drawText(
+                "${stageLayout.stage.subject} (${stageLayout.stage.questions} сұрақ, ${stageLayout.stage.minutes} мин)",
+                stageLayout.x, stageLayout.y + 10f, subjectPaint
             )
-            maxYInRow = maxOf(maxYInRow, colY + stageHeight)
-
-            if (index % 2 == 0) {
-                colX = MARGIN + colWidth + 20f
-            } else {
-                colX = MARGIN
-                colY = maxYInRow + 16f
-                maxYInRow = colY
-            }
-        }
-    }
-
-    private fun drawStage(
-        canvas: Canvas,
-        x: Float,
-        startY: Float,
-        width: Float,
-        stage: Stage,
-        subjectPaint: Paint,
-        questionPaint: Paint,
-        circlePaint: Paint,
-        boxPaint: Paint
-    ): Float {
-        var y = startY
-        canvas.drawText(
-            "${stage.subject} (${stage.questions} сұрақ, ${stage.minutes} мин)",
-            x, y, subjectPaint
-        )
-        y += 14f
-
-        val rowHeight = 12f
-        val colGap = width / 2
-        // Block numbering: first half of questions fill the left column
-        // top-to-bottom, then the second half fill the right column —
-        // not alternating between columns.
-        val rowsPerCol = (stage.questions + 1) / 2
-
-        for (q in 1..stage.questions) {
-            val col = (q - 1) / rowsPerCol
-            val row = (q - 1) % rowsPerCol
-            val qx = x + col * colGap
-            val qy = y + row * rowHeight
-
-            canvas.drawText("$q.", qx, qy, questionPaint)
-
-            if (stage.format == "number") {
-                for (i in 0..2) {
-                    val bx = qx + 18f + i * 12f
-                    canvas.drawRect(bx, qy - 8f, bx + 10f, qy + 2f, boxPaint)
-                }
-            } else {
-                val letters = listOf("A", "B", "C", "D")
-                letters.forEachIndexed { i, _ ->
-                    val cx = qx + 20f + i * 14f
-                    canvas.drawCircle(cx, qy - 3f, 5f, circlePaint)
+            stageLayout.questions.forEach { q ->
+                val labelX = q.options.first().x - 20f
+                canvas.drawText("${q.questionNumber}.", labelX, q.options.first().y + 3f, questionPaint)
+                if (q.format == "number") {
+                    q.options.forEach { opt ->
+                        canvas.drawRect(opt.x - 5f, opt.y - 5f, opt.x + 5f, opt.y + 5f, boxPaint)
+                    }
+                } else {
+                    q.options.forEach { opt ->
+                        canvas.drawCircle(opt.x, opt.y, 5f, circlePaint)
+                    }
                 }
             }
         }
-
-        val totalRows = rowsPerCol
-        return 14f + totalRows * rowHeight + 10f
     }
 }

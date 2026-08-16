@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kz.ziro.app.data.TestType
 import kz.ziro.app.ui.screens.AnswerSheetScreen
+import kz.ziro.app.ui.screens.CaptureAnswerSheetScreen
 import kz.ziro.app.ui.screens.CreateTestTypeScreen
 import kz.ziro.app.ui.screens.HomeScreen
 import kz.ziro.app.ui.screens.LoginScreen
@@ -35,7 +36,8 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Screen {
-    LOGIN, HOME, TEST_TYPES_LIST, CREATE_TEST_TYPE, ANSWER_SHEET, QR_SCAN, SCAN_RESULT
+    LOGIN, HOME, TEST_TYPES_LIST, CREATE_TEST_TYPE, ANSWER_SHEET,
+    QR_SCAN, SCAN_RESULT, CAPTURE_SHEET
 }
 
 @Composable
@@ -73,7 +75,14 @@ fun ZiroApp() {
         Screen.ANSWER_SHEET -> selectedTestType?.let { tt ->
             AnswerSheetScreen(
                 testType = tt,
-                onBack = { screen = Screen.TEST_TYPES_LIST }
+                onBack = { screen = Screen.TEST_TYPES_LIST },
+                onScanSheet = { screen = Screen.CAPTURE_SHEET }
+            )
+        }
+        Screen.CAPTURE_SHEET -> selectedTestType?.let { tt ->
+            CaptureAnswerSheetScreen(
+                testType = tt,
+                onBack = { screen = Screen.ANSWER_SHEET }
             )
         }
         Screen.QR_SCAN -> QrScanScreen(

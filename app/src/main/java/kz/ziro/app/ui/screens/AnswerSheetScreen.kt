@@ -16,7 +16,7 @@ import kz.ziro.app.pdf.AnswerSheetPdfGenerator
 import java.io.File
 
 @Composable
-fun AnswerSheetScreen(testType: TestType, onBack: () -> Unit) {
+fun AnswerSheetScreen(testType: TestType, onBack: () -> Unit, onScanSheet: () -> Unit) {
     val context = LocalContext.current
     var generatedFile by remember { mutableStateOf<File?>(null) }
     var loading by remember { mutableStateOf(false) }
@@ -82,6 +82,11 @@ fun AnswerSheetScreen(testType: TestType, onBack: () -> Unit) {
             ) {
                 Text("Бөлісу (WhatsApp және т.б.)")
             }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = onScanSheet, modifier = Modifier.fillMaxWidth()) {
+            Text("Толтырылған парақты сканерлеу (сынақ)")
         }
     }
 }

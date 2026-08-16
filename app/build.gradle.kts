@@ -66,4 +66,8 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$camerax")
     implementation("androidx.camera:camera-view:$camerax")
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
+    // OpenCV: used to detect the corner registration marks, correct
+    // perspective/skew, then sample bubble darkness at known coordinates
+    implementation("org.opencv:opencv:5.0.0.1")
 }
