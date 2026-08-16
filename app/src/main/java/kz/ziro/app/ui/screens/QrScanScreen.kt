@@ -26,15 +26,9 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 
-/**
- * Live QR scanner: continuously analyzes camera frames and reports the
- * decoded QR text as soon as one is found and framed steadily, without
- * requiring the user to press a shutter button.
- */
 @Composable
 fun QrScanScreen(onBack: () -> Unit, onScanned: (String) -> Unit) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
 
     var hasPermission by remember {
         mutableStateOf(
@@ -45,6 +39,9 @@ fun QrScanScreen(onBack: () -> Unit, onScanned: (String) -> Unit) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasPermission = granted }
+
+    var status by remember { mutableStateOf("Іске қосылуда...") }
+    var framesAnalyzed by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         if (!hasPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -65,13 +62,20 @@ fun QrScanScreen(onBack: () -> Unit, onScanned: (String) -> Unit) {
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
+        Text(
+            "$status (кадр: $framesAnalyzed)",
+            fontSize = 11.sp,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
 
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             if (hasPermission) {
                 CameraPreviewWithQrDetection(
-                    onQrDetected = onScanned
+                    onQrDetected = onScanned,
+                    onStatus = { status = it },
+                    onFrameAnalyzed = { framesAnalyzed++ }
                 )
             } else {
                 Column(
@@ -91,7 +95,11 @@ fun QrScanScreen(onBack: () -> Unit, onScanned: (String) -> Unit) {
 }
 
 @Composable
-private fun CameraPreviewWithQrDetection(onQrDetected: (String) -> Unit) {
+private fun CameraPreviewWithQrDetection(
+    onQrDetected: (String) -> Unit,
+    onStatus: (String) -> Unit,
+    onFrameAnalyzed: () -> Unit
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var alreadyReported by remember { mutableStateOf(false) }
@@ -103,42 +111,49 @@ private fun CameraPreviewWithQrDetection(onQrDetected: (String) -> Unit) {
             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
 
             cameraProviderFuture.addListener({
-                val cameraProvider = cameraProviderFuture.get()
-
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-                }
-
-                val scannerOptions = BarcodeScannerOptions.Builder()
-                    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                    .build()
-                val scanner = BarcodeScanning.getClient(scannerOptions)
-
-                val imageAnalysis = ImageAnalysis.Builder()
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
-
-                imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
-                    val mediaImage = imageProxy.image
-                    if (mediaImage != null && !alreadyReported) {
-                        val inputImage = InputImage.fromMediaImage(
-                            mediaImage, imageProxy.imageInfo.rotationDegrees
-                        )
-                        scanner.process(inputImage)
-                            .addOnSuccessListener { barcodes ->
-                                val value = barcodes.firstOrNull()?.rawValue
-                                if (value != null && !alreadyReported) {
-                                    alreadyReported = true
-                                    onQrDetected(value)
-                                }
-                            }
-                            .addOnCompleteListener { imageProxy.close() }
-                    } else {
-                        imageProxy.close()
-                    }
-                }
-
                 try {
+                    val cameraProvider = cameraProviderFuture.get()
+
+                    val preview = Preview.Builder().build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
+                    }
+
+                    val scannerOptions = BarcodeScannerOptions.Builder()
+                        .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                        .build()
+                    val scanner = BarcodeScanning.getClient(scannerOptions)
+
+                    val imageAnalysis = ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+
+                    imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
+                        onFrameAnalyzed()
+                        val mediaImage = imageProxy.image
+                        if (mediaImage != null && !alreadyReported) {
+                            val inputImage = InputImage.fromMediaImage(
+                                mediaImage, imageProxy.imageInfo.rotationDegrees
+                            )
+                            scanner.process(inputImage)
+                                .addOnSuccessListener { barcodes ->
+                                    val value = barcodes.firstOrNull()?.rawValue
+                                    if (value != null && !alreadyReported) {
+                                        alreadyReported = true
+                                        onStatus("Табылды!")
+                                        onQrDetected(value)
+                                    } else {
+                                        onStatus("Іздеуде...")
+                                    }
+                                }
+                                .addOnFailureListener { e ->
+                                    onStatus("Қате: ${e.message}")
+                                }
+                                .addOnCompleteListener { imageProxy.close() }
+                        } else {
+                            imageProxy.close()
+                        }
+                    }
+
                     cameraProvider.unbindAll()
                     cameraProvider.bindToLifecycle(
                         lifecycleOwner,
@@ -146,8 +161,9 @@ private fun CameraPreviewWithQrDetection(onQrDetected: (String) -> Unit) {
                         preview,
                         imageAnalysis
                     )
+                    onStatus("Камера іске қосылды")
                 } catch (e: Exception) {
-                    // Camera binding failed; preview simply won't show.
+                    onStatus("Камера қатесі: ${e.message}")
                 }
             }, ContextCompat.getMainExecutor(ctx))
 
