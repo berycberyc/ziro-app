@@ -69,5 +69,5 @@ dependencies {
 
     // OpenCV: used to detect the corner registration marks, correct
     // perspective/skew, then sample bubble darkness at known coordinates
-    implementation("org.opencv:opencv:5.0.0.1")
+    implementation("org.opencv:opencv:4.13.0")
 }
