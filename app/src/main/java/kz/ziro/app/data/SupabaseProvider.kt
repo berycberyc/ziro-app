@@ -13,7 +13,7 @@ object SupabaseProvider {
     // TODO: replace with your real Supabase URL and Publishable (anon) key,
     // same values used in the website's environment variables.
     private const val SUPABASE_URL = "https://phpuhsdshorbvdlvianw.supabase.co"
-    private const val SUPABASE_ANON_KEY = "sb_publishable_7d0t3FAjRtM-BWl79NqLig_xb4FfnBv"
+    private const val SUPABASE_ANON_KEY = "REPLACE_WITH_YOUR_PUBLISHABLE_KEY"
 
     val client = createSupabaseClient(
         supabaseUrl = SUPABASE_URL,

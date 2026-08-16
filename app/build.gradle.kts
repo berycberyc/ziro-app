@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "kz.ziro.app"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "kz.ziro.app"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
     }
