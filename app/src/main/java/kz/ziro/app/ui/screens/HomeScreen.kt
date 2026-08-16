@@ -12,7 +12,11 @@ import kotlinx.coroutines.launch
 import kz.ziro.app.data.AuthRepository
 
 @Composable
-fun HomeScreen(role: String, onLoggedOut: () -> Unit) {
+fun HomeScreen(
+    role: String,
+    onOpenTestTypes: () -> Unit,
+    onLoggedOut: () -> Unit
+) {
     val authRepository = androidx.compose.runtime.remember { AuthRepository() }
     val scope = rememberCoroutineScope()
 
@@ -25,13 +29,20 @@ fun HomeScreen(role: String, onLoggedOut: () -> Unit) {
         Text("Сәлем!", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
         Text("$roleLabel ретінде кірдіңіз.", fontSize = 15.sp)
 
-        Text(
-            "Тест түрін құру, PDF генерациясы және сканерлеу бөлімдері жақын арада осында пайда болады.",
-            fontSize = 14.sp,
-            modifier = Modifier.padding(top = 24.dp)
-        )
-
         Spacer(Modifier.height(32.dp))
+
+        if (role == "admin") {
+            Button(onClick = onOpenTestTypes, modifier = Modifier.fillMaxWidth()) {
+                Text("Тест түрлері")
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        Text(
+            "PDF генерациясы және сканерлеу бөлімдері жақын арада осында пайда болады.",
+            fontSize = 13.sp,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
 
         OutlinedButton(
             onClick = {
