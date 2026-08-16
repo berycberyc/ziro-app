@@ -16,6 +16,7 @@ fun HomeScreen(
     role: String,
     onOpenTestTypes: () -> Unit,
     onOpenScan: () -> Unit,
+    onOpenGenerateSheets: () -> Unit,
     onLoggedOut: () -> Unit
 ) {
     val authRepository = androidx.compose.runtime.remember { AuthRepository() }
@@ -35,6 +36,10 @@ fun HomeScreen(
         if (role == "admin") {
             Button(onClick = onOpenTestTypes, modifier = Modifier.fillMaxWidth()) {
                 Text("Тест түрлері")
+            }
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = onOpenGenerateSheets, modifier = Modifier.fillMaxWidth()) {
+                Text("Жауап парақтарын дайындау")
             }
             Spacer(Modifier.height(12.dp))
         }

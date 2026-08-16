@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import kz.ziro.app.data.TestType
+import kz.ziro.app.omr.SheetQrData
 import kz.ziro.app.pdf.AnswerSheetPdfGenerator
 import java.io.File
 
@@ -20,6 +21,16 @@ fun AnswerSheetScreen(testType: TestType, onBack: () -> Unit, onScanSheet: () ->
     val context = LocalContext.current
     var generatedFile by remember { mutableStateOf<File?>(null) }
     var loading by remember { mutableStateOf(false) }
+
+    fun shareFile(file: File) {
+        val uri = FileProvider.getUriForFile(context, "kz.ziro.app.fileprovider", file)
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Бөлісу"))
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
         TextButton(onClick = onBack) { Text("← Артқа") }
@@ -52,11 +63,32 @@ fun AnswerSheetScreen(testType: TestType, onBack: () -> Unit, onScanSheet: () ->
             enabled = !loading,
             modifier = Modifier.fillMaxWidth()
         ) {
-            if (loading) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp))
-            } else {
-                Text("Жауап парағын жасау (PDF)")
-            }
+            Text("Бос парақ жасау (PDF)")
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = {
+                loading = true
+                try {
+                    val fakeData = SheetQrData(
+                        testTypeId = testType.id ?: "",
+                        studentName = "Тест Оқушы",
+                        classroom = "101",
+                        variant = "A"
+                    )
+                    generatedFile = AnswerSheetPdfGenerator.generateWithQr(context, testType, fakeData)
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Қате: ${e.message}", Toast.LENGTH_LONG).show()
+                } finally {
+                    loading = false
+                }
+            },
+            enabled = !loading,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Сынақ парағы (QR-мен, тест үшін)")
         }
 
         generatedFile?.let { file ->
@@ -64,22 +96,7 @@ fun AnswerSheetScreen(testType: TestType, onBack: () -> Unit, onScanSheet: () ->
             Text("Дайын: ${file.name}", fontSize = 13.sp)
             Spacer(Modifier.height(8.dp))
 
-            Button(
-                onClick = {
-                    val uri = FileProvider.getUriForFile(
-                        context,
-                        "kz.ziro.app.fileprovider",
-                        file
-                    )
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/pdf"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(Intent.createChooser(shareIntent, "Бөлісу"))
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Button(onClick = { shareFile(file) }, modifier = Modifier.fillMaxWidth()) {
                 Text("Бөлісу (WhatsApp және т.б.)")
             }
         }

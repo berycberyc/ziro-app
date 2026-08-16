@@ -11,6 +11,18 @@ class TestTypeRepository {
             .decodeList<TestType>()
     }
 
+    suspend fun getById(id: String): TestType? {
+        return try {
+            client.postgrest["test_types"]
+                .select {
+                    filter { eq("id", id) }
+                }
+                .decodeSingleOrNull<TestType>()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun create(testType: TestType): Boolean {
         return try {
             client.postgrest["test_types"].insert(testType)

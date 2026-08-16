@@ -11,14 +11,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kz.ziro.app.data.TestSession
 import kz.ziro.app.data.TestType
 import kz.ziro.app.ui.screens.AnswerSheetScreen
 import kz.ziro.app.ui.screens.CaptureAnswerSheetScreen
 import kz.ziro.app.ui.screens.CreateTestTypeScreen
+import kz.ziro.app.ui.screens.GenerateSheetsScreen
 import kz.ziro.app.ui.screens.HomeScreen
 import kz.ziro.app.ui.screens.LoginScreen
 import kz.ziro.app.ui.screens.QrScanScreen
 import kz.ziro.app.ui.screens.ScanResultScreen
+import kz.ziro.app.ui.screens.SessionPickerScreen
 import kz.ziro.app.ui.screens.TestTypesListScreen
 import kz.ziro.app.ui.theme.ZiroTheme
 
@@ -37,7 +40,7 @@ class MainActivity : ComponentActivity() {
 
 private enum class Screen {
     LOGIN, HOME, TEST_TYPES_LIST, CREATE_TEST_TYPE, ANSWER_SHEET,
-    QR_SCAN, SCAN_RESULT, CAPTURE_SHEET
+    QR_SCAN, SCAN_RESULT, CAPTURE_SHEET, SESSION_PICKER, GENERATE_SHEETS
 }
 
 @Composable
@@ -45,6 +48,7 @@ fun ZiroApp() {
     var screen by remember { mutableStateOf(Screen.LOGIN) }
     var userRole by remember { mutableStateOf("") }
     var selectedTestType by remember { mutableStateOf<TestType?>(null) }
+    var selectedSession by remember { mutableStateOf<TestSession?>(null) }
     var lastScanValue by remember { mutableStateOf("") }
 
     when (screen) {
@@ -58,6 +62,7 @@ fun ZiroApp() {
             role = userRole,
             onOpenTestTypes = { screen = Screen.TEST_TYPES_LIST },
             onOpenScan = { screen = Screen.QR_SCAN },
+            onOpenGenerateSheets = { screen = Screen.SESSION_PICKER },
             onLoggedOut = { screen = Screen.LOGIN }
         )
         Screen.TEST_TYPES_LIST -> TestTypesListScreen(
@@ -97,5 +102,18 @@ fun ZiroApp() {
             onScanAgain = { screen = Screen.QR_SCAN },
             onBack = { screen = Screen.HOME }
         )
+        Screen.SESSION_PICKER -> SessionPickerScreen(
+            onBack = { screen = Screen.HOME },
+            onSelect = { session ->
+                selectedSession = session
+                screen = Screen.GENERATE_SHEETS
+            }
+        )
+        Screen.GENERATE_SHEETS -> selectedSession?.let { s ->
+            GenerateSheetsScreen(
+                session = s,
+                onBack = { screen = Screen.SESSION_PICKER }
+            )
+        }
     }
 }

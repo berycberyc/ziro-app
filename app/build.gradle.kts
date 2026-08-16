@@ -70,4 +70,7 @@ dependencies {
     // OpenCV: used to detect the corner registration marks, correct
     // perspective/skew, then sample bubble darkness at known coordinates
     implementation("org.opencv:opencv:4.13.0")
+
+    // QR code generation (drawing a real QR into the personalized answer sheet PDF)
+    implementation("com.google.zxing:core:3.5.3")
 }
