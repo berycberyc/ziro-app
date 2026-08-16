@@ -19,4 +19,15 @@ class TestTypeRepository {
             false
         }
     }
+
+    suspend fun delete(id: String): Boolean {
+        return try {
+            client.postgrest["test_types"].delete {
+                filter { eq("id", id) }
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
 }

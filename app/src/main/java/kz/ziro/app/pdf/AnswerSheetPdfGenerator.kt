@@ -97,6 +97,31 @@ object AnswerSheetPdfGenerator {
             style = Paint.Style.STROKE
             strokeWidth = 1f
         }
+        val registrationMarkPaint = Paint().apply {
+            color = Color.BLACK
+            style = Paint.Style.FILL
+        }
+
+        // Corner registration marks: solid black squares used by the scanning
+        // app to detect and correct page skew/rotation before reading bubbles.
+        val markSize = 14f
+        val markInset = 12f
+        canvas.drawRect(markInset, markInset, markInset + markSize, markInset + markSize, registrationMarkPaint)
+        canvas.drawRect(
+            PAGE_WIDTH - markInset - markSize, markInset,
+            PAGE_WIDTH - markInset, markInset + markSize,
+            registrationMarkPaint
+        )
+        canvas.drawRect(
+            markInset, PAGE_HEIGHT - markInset - markSize,
+            markInset + markSize, PAGE_HEIGHT - markInset,
+            registrationMarkPaint
+        )
+        canvas.drawRect(
+            PAGE_WIDTH - markInset - markSize, PAGE_HEIGHT - markInset - markSize,
+            PAGE_WIDTH - markInset, PAGE_HEIGHT - markInset,
+            registrationMarkPaint
+        )
 
         var y = MARGIN
 
