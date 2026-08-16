@@ -15,6 +15,7 @@ import kz.ziro.app.data.AuthRepository
 fun HomeScreen(
     role: String,
     onOpenTestTypes: () -> Unit,
+    onOpenScan: () -> Unit,
     onLoggedOut: () -> Unit
 ) {
     val authRepository = androidx.compose.runtime.remember { AuthRepository() }
@@ -38,11 +39,11 @@ fun HomeScreen(
             Spacer(Modifier.height(12.dp))
         }
 
-        Text(
-            "PDF генерациясы және сканерлеу бөлімдері жақын арада осында пайда болады.",
-            fontSize = 13.sp,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
+        Button(onClick = onOpenScan, modifier = Modifier.fillMaxWidth()) {
+            Text("QR сканерлеу (сынақ)")
+        }
+
+        Spacer(Modifier.height(24.dp))
 
         OutlinedButton(
             onClick = {

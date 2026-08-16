@@ -16,6 +16,8 @@ import kz.ziro.app.ui.screens.AnswerSheetScreen
 import kz.ziro.app.ui.screens.CreateTestTypeScreen
 import kz.ziro.app.ui.screens.HomeScreen
 import kz.ziro.app.ui.screens.LoginScreen
+import kz.ziro.app.ui.screens.QrScanScreen
+import kz.ziro.app.ui.screens.ScanResultScreen
 import kz.ziro.app.ui.screens.TestTypesListScreen
 import kz.ziro.app.ui.theme.ZiroTheme
 
@@ -32,13 +34,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { LOGIN, HOME, TEST_TYPES_LIST, CREATE_TEST_TYPE, ANSWER_SHEET }
+private enum class Screen {
+    LOGIN, HOME, TEST_TYPES_LIST, CREATE_TEST_TYPE, ANSWER_SHEET, QR_SCAN, SCAN_RESULT
+}
 
 @Composable
 fun ZiroApp() {
     var screen by remember { mutableStateOf(Screen.LOGIN) }
     var userRole by remember { mutableStateOf("") }
     var selectedTestType by remember { mutableStateOf<TestType?>(null) }
+    var lastScanValue by remember { mutableStateOf("") }
 
     when (screen) {
         Screen.LOGIN -> LoginScreen(
@@ -50,6 +55,7 @@ fun ZiroApp() {
         Screen.HOME -> HomeScreen(
             role = userRole,
             onOpenTestTypes = { screen = Screen.TEST_TYPES_LIST },
+            onOpenScan = { screen = Screen.QR_SCAN },
             onLoggedOut = { screen = Screen.LOGIN }
         )
         Screen.TEST_TYPES_LIST -> TestTypesListScreen(
@@ -70,5 +76,17 @@ fun ZiroApp() {
                 onBack = { screen = Screen.TEST_TYPES_LIST }
             )
         }
+        Screen.QR_SCAN -> QrScanScreen(
+            onBack = { screen = Screen.HOME },
+            onScanned = { value ->
+                lastScanValue = value
+                screen = Screen.SCAN_RESULT
+            }
+        )
+        Screen.SCAN_RESULT -> ScanResultScreen(
+            rawValue = lastScanValue,
+            onScanAgain = { screen = Screen.QR_SCAN },
+            onBack = { screen = Screen.HOME }
+        )
     }
 }
