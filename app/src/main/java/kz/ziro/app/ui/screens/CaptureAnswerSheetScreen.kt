@@ -26,12 +26,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import kz.ziro.app.data.Registration
 import kz.ziro.app.data.TestType
 import kz.ziro.app.omr.AnalysisResult
 import kz.ziro.app.omr.BubbleSheetAnalyzer
 
 @Composable
-fun CaptureAnswerSheetScreen(testType: TestType, onBack: () -> Unit) {
+fun CaptureAnswerSheetScreen(
+    testType: TestType,
+    registration: Registration? = null,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     var hasPermission by remember {
         mutableStateOf(
@@ -46,6 +51,7 @@ fun CaptureAnswerSheetScreen(testType: TestType, onBack: () -> Unit) {
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
     var result by remember { mutableStateOf<AnalysisResult?>(null) }
     var analyzing by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf("Камера дайындалуда...") }
 
     LaunchedEffect(Unit) {
         if (!hasPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -54,10 +60,11 @@ fun CaptureAnswerSheetScreen(testType: TestType, onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         TextButton(onClick = onBack) { Text("← Артқа") }
         Text(
-            "${testType.name_kk} — парақты түсіру",
+            "${testType.name_kk}" + (registration?.students?.full_name?.let { " — $it" } ?: ""),
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold
         )
+        Text(status, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Spacer(Modifier.height(8.dp))
 
@@ -65,7 +72,11 @@ fun CaptureAnswerSheetScreen(testType: TestType, onBack: () -> Unit) {
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 if (hasPermission) {
                     CapturePreview(
-                        onImageCaptureReady = { imageCapture = it }
+                        onImageCaptureReady = {
+                            imageCapture = it
+                            status = "Дайын. Түсіруге болады."
+                        },
+                        onError = { status = "Камера қатесі: $it" }
                     )
                 } else {
                     Text("Камераға рұқсат керек")
@@ -74,21 +85,47 @@ fun CaptureAnswerSheetScreen(testType: TestType, onBack: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             Button(
                 onClick = {
-                    val capture = imageCapture ?: return@Button
+                    val capture = imageCapture
+                    if (capture == null) {
+                        status = "Камера әлі дайын емес, күте тұрыңыз."
+                        return@Button
+                    }
                     analyzing = true
+                    status = "Түсірілуде..."
                     capture.takePicture(
                         ContextCompat.getMainExecutor(context),
                         object : ImageCapture.OnImageCapturedCallback() {
                             override fun onCaptureSuccess(image: ImageProxy) {
-                                val bytes = ByteArray(image.planes[0].buffer.remaining())
-                                image.planes[0].buffer.get(bytes)
-                                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                image.close()
-                                result = BubbleSheetAnalyzer.analyze(bitmap, testType, pageNumber = 1)
-                                analyzing = false
+                                status = "Сурет алынды, талдау басталды..."
+                                try {
+                                    val bytes = ByteArray(image.planes[0].buffer.remaining())
+                                    image.planes[0].buffer.get(bytes)
+                                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                    image.close()
+
+                                    if (bitmap == null) {
+                                        status = "Қате: сурет декодталмады."
+                                        analyzing = false
+                                        return
+                                    }
+
+                                    val analysis = BubbleSheetAnalyzer.analyze(bitmap, testType, pageNumber = 1)
+                                    if (!analysis.cornersFound) {
+                                        status = "Бұрыштық белгілер табылмады. Жарықты және бұрышты түзетіп, қайта түсіріңіз."
+                                        analyzing = false
+                                        return
+                                    }
+                                    status = "Дайын."
+                                    result = analysis
+                                } catch (e: Exception) {
+                                    status = "Талдау қатесі: ${e.message ?: e.javaClass.simpleName}"
+                                } finally {
+                                    analyzing = false
+                                }
                             }
 
                             override fun onError(exception: ImageCaptureException) {
+                                status = "Түсіру қатесі: ${exception.message}"
                                 analyzing = false
                             }
                         }
@@ -104,13 +141,16 @@ fun CaptureAnswerSheetScreen(testType: TestType, onBack: () -> Unit) {
                 }
             }
         } else {
-            ResultList(result = result!!, onRetake = { result = null })
+            ResultList(result = result!!, onRetake = { result = null; status = "Дайын. Түсіруге болады." })
         }
     }
 }
 
 @Composable
-private fun CapturePreview(onImageCaptureReady: (ImageCapture) -> Unit) {
+private fun CapturePreview(
+    onImageCaptureReady: (ImageCapture) -> Unit,
+    onError: (String) -> Unit
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -120,18 +160,19 @@ private fun CapturePreview(onImageCaptureReady: (ImageCapture) -> Unit) {
             val previewView = PreviewView(ctx)
             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
             cameraProviderFuture.addListener({
-                val cameraProvider = cameraProviderFuture.get()
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-                }
-                val capture = ImageCapture.Builder().build()
                 try {
+                    val cameraProvider = cameraProviderFuture.get()
+                    val preview = Preview.Builder().build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
+                    }
+                    val capture = ImageCapture.Builder().build()
                     cameraProvider.unbindAll()
                     cameraProvider.bindToLifecycle(
                         lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture
                     )
                     onImageCaptureReady(capture)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    onError(e.message ?: e.javaClass.simpleName)
                 }
             }, ContextCompat.getMainExecutor(ctx))
             previewView
@@ -141,19 +182,6 @@ private fun CapturePreview(onImageCaptureReady: (ImageCapture) -> Unit) {
 
 @Composable
 private fun ResultList(result: AnalysisResult, onRetake: () -> Unit) {
-    if (!result.cornersFound) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text("Бұрыштық белгілер табылмады. Қайта түсіріңіз.")
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = onRetake) { Text("Қайта түсіру") }
-        }
-        return
-    }
-
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
             "Танылды: ${result.answers.count { it.detectedLabel != null }} / ${result.answers.size}",

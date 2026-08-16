@@ -5,14 +5,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
+import kz.ziro.app.data.Registration
+import kz.ziro.app.data.RegistrationRepository
 import kz.ziro.app.data.TestSession
 import kz.ziro.app.data.TestType
+import kz.ziro.app.data.TestTypeRepository
+import kz.ziro.app.omr.SheetQrData
 import kz.ziro.app.ui.screens.AnswerSheetScreen
 import kz.ziro.app.ui.screens.CaptureAnswerSheetScreen
 import kz.ziro.app.ui.screens.CreateTestTypeScreen
@@ -48,8 +49,14 @@ fun ZiroApp() {
     var screen by remember { mutableStateOf(Screen.LOGIN) }
     var userRole by remember { mutableStateOf("") }
     var selectedTestType by remember { mutableStateOf<TestType?>(null) }
+    var selectedRegistration by remember { mutableStateOf<Registration?>(null) }
     var selectedSession by remember { mutableStateOf<TestSession?>(null) }
     var lastScanValue by remember { mutableStateOf("") }
+    var scanLookupStatus by remember { mutableStateOf("") }
+
+    val scope = rememberCoroutineScope()
+    val registrationRepo = remember { RegistrationRepository() }
+    val testTypeRepo = remember { TestTypeRepository() }
 
     when (screen) {
         Screen.LOGIN -> LoginScreen(
@@ -81,25 +88,51 @@ fun ZiroApp() {
             AnswerSheetScreen(
                 testType = tt,
                 onBack = { screen = Screen.TEST_TYPES_LIST },
-                onScanSheet = { screen = Screen.CAPTURE_SHEET }
+                onScanSheet = { screen = Screen.QR_SCAN }
             )
         }
         Screen.CAPTURE_SHEET -> selectedTestType?.let { tt ->
             CaptureAnswerSheetScreen(
                 testType = tt,
-                onBack = { screen = Screen.ANSWER_SHEET }
+                registration = selectedRegistration,
+                onBack = { screen = Screen.HOME }
             )
         }
         Screen.QR_SCAN -> QrScanScreen(
             onBack = { screen = Screen.HOME },
             onScanned = { value ->
                 lastScanValue = value
-                screen = Screen.SCAN_RESULT
+                val regId = SheetQrData.decode(value)
+                if (regId == null) {
+                    screen = Screen.SCAN_RESULT
+                } else {
+                    scanLookupStatus = "Тіркеу деректері ізделуде..."
+                    scope.launch {
+                        val registration = registrationRepo.getById(regId)
+                        if (registration == null) {
+                            scanLookupStatus = "Тіркеу табылмады (ID: $regId)"
+                            screen = Screen.SCAN_RESULT
+                            return@launch
+                        }
+                        val testType = testTypeRepo.getById(registration.test_type_id)
+                        if (testType == null) {
+                            scanLookupStatus = "Тест түрі табылмады"
+                            screen = Screen.SCAN_RESULT
+                            return@launch
+                        }
+                        selectedRegistration = registration
+                        selectedTestType = testType
+                        screen = Screen.CAPTURE_SHEET
+                    }
+                }
             }
         )
         Screen.SCAN_RESULT -> ScanResultScreen(
-            rawValue = lastScanValue,
-            onScanAgain = { screen = Screen.QR_SCAN },
+            rawValue = if (scanLookupStatus.isNotEmpty()) "$lastScanValue\n\n$scanLookupStatus" else lastScanValue,
+            onScanAgain = {
+                scanLookupStatus = ""
+                screen = Screen.QR_SCAN
+            },
             onBack = { screen = Screen.HOME }
         )
         Screen.SESSION_PICKER -> SessionPickerScreen(

@@ -10,17 +10,22 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import java.io.File
 import java.io.FileOutputStream
+import kz.ziro.app.data.Registration
 import kz.ziro.app.data.TestType
 import kz.ziro.app.omr.SheetQrData
 import kz.ziro.app.pdf.AnswerSheetGeometry.MARGIN
 import kz.ziro.app.pdf.AnswerSheetGeometry.PAGE_HEIGHT
 import kz.ziro.app.pdf.AnswerSheetGeometry.PAGE_WIDTH
 
-/**
- * Generates answer sheet PDFs from a TestType's stages, using the shared
- * AnswerSheetGeometry so the printed layout and the OMR analyzer that later
- * reads it always agree on where every bubble/segment is.
- */
+/** Header display fields — resolved once, either from a real registration or test placeholders. */
+private data class HeaderInfo(
+    val studentName: String,
+    val language: String,
+    val classroom: String,
+    val variant: String,
+    val qrContent: String?
+)
+
 object AnswerSheetPdfGenerator {
 
     private fun languageLabel(code: String?): String = when (code) {
@@ -29,16 +34,32 @@ object AnswerSheetPdfGenerator {
         else -> "—"
     }
 
+    /** Blank template — no QR, empty header fields to fill by hand. */
     fun generate(context: Context, testType: TestType): File =
-        render(context, testType, qrData = null, sessionTitle = null, fileSuffix = "answer_sheet")
+        render(context, testType, header = null, sessionTitle = null, fileSuffix = "answer_sheet")
 
-    fun generateWithQr(context: Context, testType: TestType, qrData: SheetQrData): File =
-        render(context, testType, qrData, sessionTitle = null, fileSuffix = "personalized")
+    /** One personalized sheet for a real registration — used for isolated testing too. */
+    fun generateForRegistration(
+        context: Context,
+        testType: TestType,
+        registration: Registration,
+        sessionTitle: String? = null
+    ): File {
+        val header = HeaderInfo(
+            studentName = registration.students?.full_name ?: "—",
+            language = languageLabel(registration.students?.language),
+            classroom = registration.classroom ?: "—",
+            variant = registration.test_variant ?: "—",
+            qrContent = SheetQrData.encode(registration.id)
+        )
+        return render(context, testType, header, sessionTitle, fileSuffix = "personalized")
+    }
 
+    /** Combined batch of personalized sheets, sorted by classroom — one file, ready to share. */
     fun generateBatch(
         context: Context,
         sessionTitle: String,
-        items: List<Pair<kz.ziro.app.data.Registration, TestType>>
+        items: List<Pair<Registration, TestType>>
     ): File {
         val sorted = items.sortedWith(
             compareBy(
@@ -51,12 +72,12 @@ object AnswerSheetPdfGenerator {
         var pageCounter = 0
 
         sorted.forEach { (registration, testType) ->
-            val qrData = SheetQrData(
-                testTypeId = testType.id ?: "",
+            val header = HeaderInfo(
                 studentName = registration.students?.full_name ?: "—",
+                language = languageLabel(registration.students?.language),
                 classroom = registration.classroom ?: "—",
                 variant = registration.test_variant ?: "—",
-                language = languageLabel(registration.students?.language)
+                qrContent = SheetQrData.encode(registration.id)
             )
             val pages = AnswerSheetGeometry.computePages(testType)
             pages.forEach { pageLayout ->
@@ -65,7 +86,7 @@ object AnswerSheetPdfGenerator {
                     PAGE_WIDTH.toInt(), PAGE_HEIGHT.toInt(), pageCounter
                 ).create()
                 val page = document.startPage(pageInfo)
-                drawPage(page.canvas, testType, pageLayout, pages.size, qrData, sessionTitle)
+                drawPage(page.canvas, testType, pageLayout, pages.size, header, sessionTitle)
                 document.finishPage(page)
             }
         }
@@ -80,7 +101,7 @@ object AnswerSheetPdfGenerator {
     private fun render(
         context: Context,
         testType: TestType,
-        qrData: SheetQrData?,
+        header: HeaderInfo?,
         sessionTitle: String?,
         fileSuffix: String
     ): File {
@@ -92,7 +113,7 @@ object AnswerSheetPdfGenerator {
                 PAGE_WIDTH.toInt(), PAGE_HEIGHT.toInt(), pageLayout.pageNumber
             ).create()
             val page = document.startPage(pageInfo)
-            drawPage(page.canvas, testType, pageLayout, pages.size, qrData, sessionTitle)
+            drawPage(page.canvas, testType, pageLayout, pages.size, header, sessionTitle)
             document.finishPage(page)
         }
 
@@ -121,15 +142,13 @@ object AnswerSheetPdfGenerator {
         testType: TestType,
         pageLayout: AnswerSheetGeometry.PageLayout,
         totalPages: Int,
-        qrData: SheetQrData?,
+        header: HeaderInfo?,
         sessionTitle: String?
     ) {
-        // Test name, session name, and all header fields share one font —
-        // only filled-in (black) vs blank-template (gray) differs.
         val headerLinePaint = Paint().apply {
-            color = if (qrData != null) Color.BLACK else Color.DKGRAY
+            color = if (header != null) Color.BLACK else Color.DKGRAY
             textSize = 10.5f
-            isFakeBoldText = qrData != null
+            isFakeBoldText = header != null
         }
         val subjectPaint = Paint().apply { color = Color.BLACK; textSize = 11f; isFakeBoldText = true }
         val questionPaint = Paint().apply { color = Color.BLACK; textSize = 8f }
@@ -143,7 +162,6 @@ object AnswerSheetPdfGenerator {
             canvas.drawRect(mark.x - half, mark.y - half, mark.x + half, mark.y + half, registrationMarkPaint)
         }
 
-        // Header: text block on the left, QR beside it (not stacked above).
         var textY = MARGIN + 10f
         val lineH = AnswerSheetGeometry.HEADER_LINE_HEIGHT
 
@@ -151,11 +169,11 @@ object AnswerSheetPdfGenerator {
         if (!sessionTitle.isNullOrBlank()) {
             canvas.drawText(sessionTitle, MARGIN, textY, headerLinePaint); textY += lineH
         }
-        if (qrData != null) {
-            canvas.drawText("Аты-жөні: ${qrData.studentName}", MARGIN, textY, headerLinePaint); textY += lineH
-            canvas.drawText("Тіл: ${qrData.language}", MARGIN, textY, headerLinePaint); textY += lineH
-            canvas.drawText("Аудитория: ${qrData.classroom}", MARGIN, textY, headerLinePaint); textY += lineH
-            canvas.drawText("Нұсқа: ${qrData.variant}", MARGIN, textY, headerLinePaint)
+        if (header != null) {
+            canvas.drawText("Аты-жөні: ${header.studentName}", MARGIN, textY, headerLinePaint); textY += lineH
+            canvas.drawText("Тіл: ${header.language}", MARGIN, textY, headerLinePaint); textY += lineH
+            canvas.drawText("Аудитория: ${header.classroom}", MARGIN, textY, headerLinePaint); textY += lineH
+            canvas.drawText("Нұсқа: ${header.variant}", MARGIN, textY, headerLinePaint)
         } else {
             canvas.drawText("Аты-жөні: ______________________", MARGIN, textY, headerLinePaint); textY += lineH
             canvas.drawText("Тіл: __________", MARGIN, textY, headerLinePaint); textY += lineH
@@ -166,8 +184,8 @@ object AnswerSheetPdfGenerator {
         val qrSize = AnswerSheetGeometry.QR_SIZE
         val qrLeft = MARGIN + AnswerSheetGeometry.HEADER_LEFT_WIDTH + AnswerSheetGeometry.HEADER_GAP
         val qrTop = MARGIN
-        if (qrData != null) {
-            val qrBitmap = makeQrBitmap(qrData.encode(), 400)
+        if (header?.qrContent != null) {
+            val qrBitmap = makeQrBitmap(header.qrContent, 400)
             val destRect = android.graphics.RectF(qrLeft, qrTop, qrLeft + qrSize, qrTop + qrSize)
             canvas.drawBitmap(qrBitmap, null, destRect, null)
         } else {
@@ -177,7 +195,6 @@ object AnswerSheetPdfGenerator {
 
         val dividerY = MARGIN + qrSize + AnswerSheetGeometry.DIVIDER_GAP - 4f
         canvas.drawLine(MARGIN, dividerY, PAGE_WIDTH - MARGIN, dividerY, lightLinePaint)
-        // Question grid starts at AnswerSheetGeometry.CONTENT_START_Y, right below this line.
 
         pageLayout.stages.forEach { stageLayout ->
             canvas.drawText(
@@ -206,7 +223,6 @@ object AnswerSheetPdfGenerator {
         }
     }
 
-    /** Draws one number-format question: label + N seven-segment digit cells. */
     private fun drawDigitQuestion(
         canvas: Canvas,
         q: AnswerSheetGeometry.QuestionLayout,
@@ -214,7 +230,6 @@ object AnswerSheetPdfGenerator {
         questionPaint: Paint,
         dotPaint: Paint
     ) {
-        // options are labeled "<digitIndex>:<segment>"; group back by digit.
         val byDigit = q.options.groupBy { it.label.substringBefore(":") }
         val firstDigitTop = byDigit["0"]?.minOfOrNull { it.y } ?: return
         canvas.drawText("${q.questionNumber}.", stageX, firstDigitTop + AnswerSheetGeometry.DIGIT_CELL_HEIGHT / 2 + 8f, questionPaint)
@@ -229,14 +244,13 @@ object AnswerSheetPdfGenerator {
             val cellLeft = a.x - w / 2
             val cellTop = a.y
 
-            // Draw the 6 corner "dots" (guide nodes) student connects with a pen.
             val nodes = listOf(
-                cellLeft to cellTop,                 // TL
-                cellLeft + w to cellTop,              // TR
-                cellLeft to cellTop + h / 2,           // ML
-                cellLeft + w to cellTop + h / 2,       // MR
-                cellLeft to cellTop + h,               // BL
-                cellLeft + w to cellTop + h            // BR
+                cellLeft to cellTop,
+                cellLeft + w to cellTop,
+                cellLeft to cellTop + h / 2,
+                cellLeft + w to cellTop + h / 2,
+                cellLeft to cellTop + h,
+                cellLeft + w to cellTop + h
             )
             nodes.forEach { (nx, ny) -> canvas.drawCircle(nx, ny, 1.1f, dotPaint) }
         }

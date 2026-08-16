@@ -12,7 +12,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import kz.ziro.app.data.TestType
-import kz.ziro.app.omr.SheetQrData
 import kz.ziro.app.pdf.AnswerSheetPdfGenerator
 import java.io.File
 
@@ -72,13 +71,15 @@ fun AnswerSheetScreen(testType: TestType, onBack: () -> Unit, onScanSheet: () ->
             onClick = {
                 loading = true
                 try {
-                    val fakeData = SheetQrData(
-                        testTypeId = testType.id ?: "",
-                        studentName = "Тест Оқушы",
+                    val fakeRegistration = kz.ziro.app.data.Registration(
+                        id = "TEST-${System.currentTimeMillis()}",
+                        test_type_id = testType.id ?: "",
                         classroom = "101",
-                        variant = "A"
+                        test_variant = "A",
+                        payment_status = "paid",
+                        students = kz.ziro.app.data.StudentRef(full_name = "Тест Оқушы", language = "kk")
                     )
-                    generatedFile = AnswerSheetPdfGenerator.generateWithQr(context, testType, fakeData)
+                    generatedFile = AnswerSheetPdfGenerator.generateForRegistration(context, testType, fakeRegistration)
                 } catch (e: Exception) {
                     Toast.makeText(context, "Қате: ${e.message}", Toast.LENGTH_LONG).show()
                 } finally {

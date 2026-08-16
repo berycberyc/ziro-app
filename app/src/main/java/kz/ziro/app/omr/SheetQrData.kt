@@ -1,31 +1,19 @@
 package kz.ziro.app.omr
 
 /**
- * The data encoded into every answer sheet's QR code.
- * Format: "ziro|<testTypeId>|<studentName>|<classroom>|<variant>|<language>"
- * Kept as a simple pipe-delimited string (not JSON) so it stays compact
- * and easy to decode quickly on-device.
+ * The data encoded into every pass/answer-sheet QR code: just the
+ * registration ID — the same number already used for the entry pass on
+ * the website. Everything else (student, classroom, variant, test type)
+ * is looked up from the database by this ID, so there's nothing to keep
+ * in sync between the QR content and the actual data.
+ * Format: "ziro-pass|<registrationId>"
  */
-data class SheetQrData(
-    val testTypeId: String,
-    val studentName: String,
-    val classroom: String,
-    val variant: String,
-    val language: String = "—"
-) {
-    fun encode(): String = "ziro|$testTypeId|$studentName|$classroom|$variant|$language"
+object SheetQrData {
+    fun encode(registrationId: String): String = "ziro-pass|$registrationId"
 
-    companion object {
-        fun decode(raw: String): SheetQrData? {
-            val parts = raw.split("|")
-            if (parts.size < 5 || parts[0] != "ziro") return null
-            return SheetQrData(
-                testTypeId = parts[1],
-                studentName = parts[2],
-                classroom = parts[3],
-                variant = parts[4],
-                language = parts.getOrElse(5) { "—" }
-            )
-        }
+    fun decode(raw: String): String? {
+        val parts = raw.split("|")
+        if (parts.size != 2 || parts[0] != "ziro-pass") return null
+        return parts[1]
     }
 }

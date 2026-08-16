@@ -49,7 +49,9 @@ object BubbleSheetAnalyzer {
     private val CANVAS_HEIGHT = (AnswerSheetGeometry.PAGE_HEIGHT * SCALE).toInt()
 
     fun analyze(bitmap: Bitmap, testType: TestType, pageNumber: Int): AnalysisResult {
-        OpenCvInit.ensureLoaded()
+        if (!OpenCvInit.ensureLoaded()) {
+            throw IllegalStateException("OpenCV кітапханасы жүктелмеді")
+        }
 
         val srcMat = Mat()
         Utils.bitmapToMat(bitmap, srcMat)
